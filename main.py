@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 #3D data matrix (trial x channel x time) 
 mat = sio.loadmat(".\\DATA\\train_subject01.mat")
+
+# Averaging the three sensors that are close to each other
+# Since the 306 sensors are grouped, three at a time, in 102 locations
 def averageSensorLocal(trial_data):
     avg_sensor = []
     for iSensor in range(0,len(trial_data),3):
@@ -37,3 +40,5 @@ for j in range(2):
 fig.tight_layout()    
 plt.show()
 torchInput = torch.randn(20, 16, 50, 100)
+
+
