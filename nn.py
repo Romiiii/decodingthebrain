@@ -5,6 +5,7 @@ import numpy as np
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
+from main import *
 
 class BrainDataset(Dataset):
   def __init__(self, train, label, Normalize=True):
@@ -17,10 +18,23 @@ class BrainDataset(Dataset):
       self.dataX = train
       self.labels= label
 
+      #print(type(self.dataX))
+      new_data = []
+      # Reduce the dimensionality
+      for i_data in range(len(self.dataX)):
+          data = self.dataX[i_data]
+          avg_sensor = averageSensorLocal(data, 3)
+          max_pool_avg_sensor = maxPoolSensors(avg_sensor, 10)
+          new_data.append(max_pool_avg_sensor)
+      self.dataX = np.array(new_data)
+
+      print("The dimensionality of the data is:", self.dataX.shape)
+      # (100, 34, 38)
+
       if Normalize:
-        mean = train.mean()
-        std = train.std()
-        self.dataX = (train - mean) / std
+        mean = self.dataX.mean()
+        std = self.dataX.std()
+        self.dataX = (self.dataX - mean) / std
 
   def __len__(self):
       return len(self.labels)
@@ -51,8 +65,9 @@ class ConvNet(nn.Module):
         #    nn.ReLU(),
         #    nn.MaxPool2d(kernel_size=2, stride=3))
         self.drop_out = nn.Dropout()
-        self.fc1 = nn.Linear(301 * 370 * 32, 1000)
-        self.fc2 = nn.Linear(1000, 10)
+       # self.fc1 = nn.Linear(301 * 370 * 32, 1000)
+        self.fc1 = nn.Linear(10, 41344)
+        self.fc2 = nn.Linear(41344, 10)
     def forward(self, x):
         out = self.layer1(x)
         #out = self.layer2(out)
@@ -62,32 +77,33 @@ class ConvNet(nn.Module):
         out = self.fc2(out)
         return out
 # Try to reshape it to [batch, channel, width, height].
+# (trial, channel, time)
 # (594, 306, 375)
+
+# (594, 102, 375)
 
 #3D data matrix (trial x channel x time)
 DATA_PATH = ".\\DATA\\train_subject01.mat"
 MODEL_STORE_PATH = ".\\models\\"
 
 mat = sio.loadmat(DATA_PATH)
-print(type(mat))
 
 train = mat["X"]
-print(train.shape)
-label = mat["y"]
 
-mean = train.mean()
-std = train.std()
+# Only take first 100 trials
+train = train[:100, :, :]
+
+label = mat["y"]
+label = label[:100, :]
 
 # Hyperparameters
 num_epochs = 5
 num_classes = 10
-batch_size = 99
+batch_size = 10
 learning_rate = 0.001
 
-#
-# #
 # MNIST dataset
-train_dataset = BrainDataset(train,label)
+train_dataset = BrainDataset(train, label)
 
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 
@@ -113,9 +129,9 @@ for epoch in range(num_epochs):
         optimizer.step()
 
         # Track the accuracy
-        total = labels.size(0)
+        total = label.size(0)
         _, predicted = torch.max(outputs.data, 1)
-        correct = (predicted == labels).sum().item()
+        correct = (predicted == label).sum().item()
         acc_list.append(correct / total)
 
         if (i + 1) % 100 == 0:
