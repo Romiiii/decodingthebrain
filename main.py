@@ -3,7 +3,7 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 #3D data matrix (trial x channel x time) 
-mat = sio.loadmat(".\\DATA\\train_subject01.mat")
+# mat = sio.loadmat(".\\DATA\\train_subject01.mat")
 
 # The input is data of 1 trial
 # Averaging the three sensors that are close to each other

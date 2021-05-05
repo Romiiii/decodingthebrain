@@ -1,11 +1,14 @@
 import scipy.io as sio
 import torch
+import time
 import matplotlib.pyplot as plt
 import numpy as np
 import torchvision.transforms as transforms
-from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
 from main import *
+from os import listdir
+from os.path import isfile, join
 
 class BrainDataset(Dataset):
   def __init__(self, train, label, Normalize=True):
@@ -58,51 +61,56 @@ class ConvNet(nn.Module):
         super(ConvNet, self).__init__()
         self.layer1 = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=5, stride=1, padding=2),
-            nn.ReLU())
-            #nn.MaxPool2d(kernel_size=2, stride=2))
-        #self.layer2 = nn.Sequential(
-        #    nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
-        #    nn.ReLU(),
-        #    nn.MaxPool2d(kernel_size=2, stride=3))
-        self.drop_out = nn.Dropout()
-       # self.fc1 = nn.Linear(301 * 370 * 32, 1000)
-        self.fc1 = nn.Linear(10, 41344)
-        self.fc2 = nn.Linear(41344, 10)
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2))
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=3))
+        self.drop_out = nn.Dropout(0.3)
+        self.fc1 = nn.Linear(2304, 4608)
+        self.fc2 = nn.Linear(4608, 1000)
+        self.fc3 = nn.Linear(1000, 100)
+        self.fc4 = nn.Linear(100, 2)
     def forward(self, x):
         out = self.layer1(x)
-        #out = self.layer2(out)
+        out = self.layer2(out)
         out = out.reshape(out.size(0), -1)
         out = self.drop_out(out)
         out = self.fc1(out)
         out = self.fc2(out)
+        out = self.fc3(out)
+        out = self.fc4(out)
         return out
+
 # Try to reshape it to [batch, channel, width, height].
 # (trial, channel, time)
 # (594, 306, 375)
 
 # (594, 102, 375)
 
+DATA_PATH = ".\\DATA\\TRAIN\\"
+MODEL_STORE_PATH = ".\\MODELS\\"
+
+onlyfiles = [f for f in listdir(DATA_PATH) if isfile(join(DATA_PATH, f))]
 #3D data matrix (trial x channel x time)
-DATA_PATH = ".\\DATA\\train_subject01.mat"
-MODEL_STORE_PATH = ".\\models\\"
-
-mat = sio.loadmat(DATA_PATH)
-
-train = mat["X"]
-
-# Only take first 100 trials
-train = train[:100, :, :]
-
-label = mat["y"]
-label = label[:100, :]
+train = []
+label = []
+for f in onlyfiles:
+    mat = sio.loadmat(DATA_PATH + f)
+    train.extend(mat["X"])
+    label.extend(mat["y"])
 
 # Hyperparameters
-num_epochs = 5
-num_classes = 10
-batch_size = 10
+num_epochs = 3
+num_classes = 2
+# Total Records (9414) 
+# Divisible by: 1, 2, 3, 6, 9, 18, 523, 1046, 
+# 1569, 3138, 4707, 9414
+batch_size = 18
 learning_rate = 0.001
 
-# MNIST dataset
+# Generate dataset from data
 train_dataset = BrainDataset(train, label)
 
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
@@ -130,12 +138,17 @@ for epoch in range(num_epochs):
 
         # Track the accuracy
         total = label.size(0)
-        _, predicted = torch.max(outputs.data, 1)
+        _, predicted = torch.max(outputs.data, 1) 
         correct = (predicted == label).sum().item()
         acc_list.append(correct / total)
 
-        if (i + 1) % 100 == 0:
+        if (i + 1) % 5 == 0:
+            print("Predicted", predicted)
+            print("Correct", label)
             print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Accuracy: {:.2f}%'
                   .format(epoch + 1, num_epochs, i + 1, total_step, loss.item(),
                           (correct / total) * 100))
 
+current_time = time.strftime("%d_%m_%y_%H_%M", time.localtime())
+output_model_name = "decodebrain%s.model" % current_time
+torch.save(model.state_dict(), MODEL_STORE_PATH + output_model_name )
